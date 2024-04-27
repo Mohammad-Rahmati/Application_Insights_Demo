@@ -49,7 +49,7 @@ chmod +x 2-AppInsights-setup.sh
 ```
 This command creates an Application Insights resource with the type and kind set to 'web', which is suitable for monitoring web applications.
 
-## Step 3: Setting Up Application Insights
+## Step 3: Setting Up Application Insights for server side monitoring
 
 To monitor and track the performance of your application, we will integrate Microsoft Application Insights. Follow these steps to configure Application Insights:
 
