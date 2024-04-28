@@ -49,7 +49,7 @@ chmod +x 2-AppInsights-setup.sh
 ```
 This command creates an Application Insights resource with the type and kind set to 'web', which is suitable for monitoring web applications.
 
-## Step 3: Setting Up Application Insights for server side monitoring
+## Step 3: Setting Up Application Insights
 
 To monitor and track the performance of your application, we will integrate Microsoft Application Insights. Follow these steps to configure Application Insights:
 
@@ -84,6 +84,90 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
     }
 
     ```
+    Add the Application Insight service to the ```Program.cs```:
 
+    ```
+    builder.Services.AddApplicationInsightsTelemetry(builder.Configuration["ApplicationInsights:ConnectionString"]);
+    ```
+## Step 4: Web App Update to add more functionality for monitoring
+ 
+### Files Modified
+- `Index.cshtml`: Razor view file for the home page.
+- `Index.cshtml.cs`: C# code-behind file for the home page.
 
+    ### 1. Update `Index.cshtml`
+    Replace the existing code in `Index.cshtml` with the following to add a new form and display API responses:
 
+    ```cshtml
+    @page
+    @model simple_webapp.Pages.IndexModel
+    @{
+        ViewData["Title"] = "Home page";
+    }
+
+    <div class="text-center">
+        <h1 class="display-4">Welcome</h1>
+        <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+
+        <!-- Updated form to include correct handler -->
+        <form method="post" asp-page-handler="FetchData">
+            <button type="submit" class="btn btn-primary">Fetch Data</button>
+        </form>
+        
+        <!-- Display API response if available -->
+        @if (Model.ApiResponse != null)
+        {
+            <div class="mt-3 alert alert-info">
+                API Response: @Model.ApiResponse
+            </div>
+        }
+    </div>
+    ```
+
+    ### 2. Update `Index.cshtml.cs`
+    ```cs
+    using Microsoft.AspNetCore.Mvc;
+    using Microsoft.AspNetCore.Mvc.RazorPages;
+    using System;
+    using System.Net.Http;
+    using System.Threading.Tasks;
+
+    namespace simple_webapp.Pages;
+
+    public class IndexModel : PageModel
+    {
+        private readonly ILogger<IndexModel> _logger;
+
+        public IndexModel(ILogger<IndexModel> logger)
+        {
+            _logger = logger;
+        }
+
+        public void OnGet()
+        {
+
+        }
+        public string ApiResponse { get; set; }
+
+        public async Task<IActionResult> OnPostFetchDataAsync()
+        {
+            using (var client = new HttpClient())
+            {
+                try
+                {
+                    // Generate a random number between 1 and 200
+                    Random random = new Random();
+                    int randomId = random.Next(1, 201);
+
+                    string apiUrl = $"https://jsonplaceholder.typicode.com/todos/{randomId}";
+                    ApiResponse = await client.GetStringAsync(apiUrl);
+                }
+                catch (System.Exception)
+                {
+                    ApiResponse = "API call failed.";
+                }
+            }
+            return Page();
+        }
+    }
+    ```
