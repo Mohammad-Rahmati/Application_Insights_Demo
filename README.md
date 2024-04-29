@@ -33,6 +33,7 @@ export APP_INSIGHTS_NAME="app-insights-demo-sis-insights"
 export FUNCTION_APP_NAME="app-insights-demo-sis-func"
 export STORAGE_ACCOUNT_NAME="appinsightstoragesis"
 export LOCAL_REPO_PATH="SimpleWebApp/"
+export FUNCTION_APP_PATH="MyFunctionApp/"
 ```
 This script automates the creation of Azure resources necessary for your application, including the deployment of SimpleWebApp web application to Azure.
 
@@ -339,3 +340,19 @@ func azure functionapp publish $FUNCTION_APP_NAME
     }
 
     ```
+    
+    ### 3. Push to deploy
+    ```bash
+    cd $LOCAL_REPO_PATH
+    git add .
+    git commit -m "add more functionality to web app"
+    git push azure master
+    ```
+
+So far, we have created a simple web app with functionality to call a public API and utilize a function app as a backend service. If deployed correctly, you should be able to see the same map as the following image. We can quickly notice that there is no sign of blob storage logs in the map. The reason is that we intentionally used `--disable-app-insights` while creating the function app in `4-functionapp.sh`.
+
+Let's set up Application Insights to send telemetry and capture the dependencies on the application map.
+
+<div align="center">
+  <img src="images/application_map_after_step_5.png" width="600" alt="Application Map after Step 5">
+</div>
