@@ -356,3 +356,19 @@ Let's set up Application Insights to send telemetry and capture the dependencies
 <div align="center">
   <img src="images/application_map_after_step_5.png" width="600" alt="Application Map after Step 5">
 </div>
+
+## Step 6: Managing Application Insights for Function App via the Console
+
+1. Enter the console.
+2. Find your Function App.
+3. In the settings on the right, choose Application Insights.
+4. Enable Application Insights and designate the previously established Application Insight resource by clicking "Select existing resource."
+
+Upon completion, you'll notice the Blob Storage dependency displayed on the application map.
+
+<div align="center">
+  <img src="images/application_map_after_step_6.png" width="600" alt="Application Map after Step 6">
+</div>
+
+### Remove Application Insight from Console
+To remove Application Insights from the Function App, access the Environment Variables section and delete the Application Insight variables. This action restores the Function App's Application Insight section to its original state. It automatically reactivates once the variables are removed.
