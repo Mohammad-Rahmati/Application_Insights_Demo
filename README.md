@@ -268,7 +268,7 @@ This sets up a new Azure Function App with a single HTTP-triggered function. The
     "Values": {
         "FUNCTIONS_WORKER_RUNTIME": "python",
         "AzureWebJobsFeatureFlags": "EnableWorkerIndexing",
-        "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=appinsightstoragesis;AccountKey=eNI5Thw8YcjMmaMfYTsBOTdBiIPUyn3/YrlA+IA/d8eQCV8uwJw5baCqHjPYNHrCED6bPkpCX+tX+AStPrbyYA==;EndpointSuffix=core.windows.net"
+        "AzureWebJobsStorage": "INSERT_CONNECTION_STRING_HERE"
         }
     }
     ```
