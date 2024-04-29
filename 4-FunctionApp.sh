@@ -15,14 +15,11 @@ az storage account create \
 az functionapp create \
     --name $FUNCTION_APP_NAME \
     --storage-account $STORAGE_ACCOUNT_NAME \
-    --consumption-plan-location eastus \
+    --consumption-plan-location $REGIONS \
     --resource-group $RESOURCE_GROUP \
     --functions-version 4 \
-    --runtime python \
-    --runtime-version 3.9 \
-    --app-insights $APP_INSIGHTS_NAME \
-    --os-type Linux \
+    --runtime dotnet \
+    --disable-app-insights \
     --output none
-
 
 echo "Function app created successfully"
