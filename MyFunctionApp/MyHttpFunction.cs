@@ -9,17 +9,34 @@ using Microsoft.Extensions.Logging;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
+using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Extensibility;
+using System.Collections.Generic;
 
 public static class HttpTrigger1
 {
+    private static TelemetryClient telemetryClient;
+    static HttpTrigger1()
+        {
+            string connectionString = Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+            TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
+            configuration.ConnectionString = connectionString;
+            telemetryClient = new TelemetryClient(configuration);
+        }
+
     [FunctionName("HttpTrigger1")]
     public static async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
         ILogger log)
     {
         log.LogInformation("C# HTTP trigger function processed a request.");
-
         string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            log.LogError("Missing AzureWebJobsStorage connection string.");
+            return new StatusCodeResult(500); // Internal Server Error
+        }
+
         CloudStorageAccount storageAccount = CloudStorageAccount.Parse(connectionString);
         CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
         CloudBlobContainer container = blobClient.GetContainerReference("azure-webjobs-container");

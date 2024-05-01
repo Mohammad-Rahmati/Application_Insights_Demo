@@ -371,4 +371,62 @@ Upon completion, you'll notice the Blob Storage dependency displayed on the appl
 </div>
 
 ### Remove Application Insight from Console
-To remove Application Insights from the Function App, access the Environment Variables section and delete the Application Insight variables. This action restores the Function App's Application Insight section to its original state. It automatically reactivates once the variables are removed.
+Let's remove Application Insights from the Function App and achieve the same goal through code instead of a non-code agent implementation. To remove Application Insights from the Function App, access the Environment Variables section and delete the Application Insight variables. This action restores the Function App's Application Insight section to its original state. It automatically reactivates once the variables are removed. You need to remove the following variables:
+1. APPINSIGHTS_INSTRUMENTATIONKEY
+2. APPLICATIONINSIGHTS_CONNECTION_STRING
+
+## Step 7: Integrate Application Insights SDK into Your Function App
+
+To include the Application Insights SDK into your Function App, start by adding the necessary package from the project directory. Run the following command:
+
+```bash
+dotnet add package Microsoft.ApplicationInsights.AspNetCore --version 2.22.0
+```
+
+Next, verify that your host.json file includes the appropriate settings to enable Application Insights:
+
+```json
+{
+    "version": "2.0",
+    "logging": {
+        "applicationInsights": {
+            "samplingSettings": {
+                "isEnabled": true
+            },
+            "enableLiveMetricsFilters": true
+        }
+    }
+}
+```
+
+Ensure that the `APPLICATIONINSIGHTS_CONNECTION_STRING` is defined in the environment variables in the Function App settings.
+
+## Step 8: Add Custom Event Tracking
+
+### Custom Event for web app
+First, ensure you include the necessary namespace in your `index.cshtml.cs` file:
+
+```csharp
+using Microsoft.ApplicationInsights;
+```
+
+Then, initialize the TelemetryClient within your IndexModel class:
+
+```cs
+private readonly TelemetryClient _telemetryClient;
+
+public IndexModel(ILogger<IndexModel> logger, TelemetryClient telemetryClient)
+{
+    _logger = logger;
+    _telemetryClient = telemetryClient;
+}
+```
+
+Include the following line to track a custom event in the try block of your OnPostFetchDataWithNameAsync method:
+
+```cs
+_telemetryClient.TrackEvent("Custom API call succeeded", new Dictionary<string, string> { { "name", Name } });
+```
+This implementation allows you to track specific events in your application, providing insights into its usage and performance. By adding custom event tracking, you can monitor how often certain features are used, detect issues, or understand user behavior better. The TrackEvent method logs the event with a name and, optionally, a set of properties that can be analyzed later in Application Insights.
+
+### Custom Event for Function App
