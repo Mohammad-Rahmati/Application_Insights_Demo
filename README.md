@@ -468,7 +468,7 @@ This block of code performs the following functions:
 
 - The `telemetryClient.TrackEvent` method is called to log a custom event named `"BlobCreated"`. This event is sent to Application Insights with the `customProperties` dictionary attached. Application Insights uses this information to record and display an event indicating that a blob was created, along with the associated metadata (blob name and URI).
 
-#### Output
+## Output
 
 Here is the result of adding a custom event using the Application Insights SDK. Noticeably, there are no live metrics (charts and sample telemetry) available for this setup. This is because we are manually configuring the telemetry setup and not using the agent-based method. However, the log is appearing in the transaction search and contains the custom information that we defined `"BlobName"` and `"BlobUri"`.
 
@@ -477,4 +477,171 @@ Here is the result of adding a custom event using the Application Insights SDK. 
   <img src="images/Step_7_custom_event_p1_0.png" width="1200" alt="">
   <img src="images/Step_7_custom_event_p1_1.png" width="1200" alt="">
   <img src="images/Step_7_custom_event_p1_2.png" width="1200" alt="">
+</div>
+
+
+## Enhancing Azure Function with Advanced Telemetry
+
+To enhance our Azure Function with advanced telemetry features including real-time metrics and detailed request tracking, follow these steps:
+
+1. QuickPulseTelemetryProcessor Setup
+
+Add the following code in the static constructor of the `HttpTrigger1` class to initialize `QuickPulseTelemetryProcessor`:
+
+```csharp
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.ApplicationInsights.DataContracts;
+using Microsoft.ApplicationInsights.Extensibility.PerfCounterCollector.QuickPulse;
+```
+
+```csharp
+QuickPulseTelemetryProcessor quickPulseProcessor = null;
+configuration.DefaultTelemetrySink.TelemetryProcessorChainBuilder
+    .Use((next) => {
+        quickPulseProcessor = new QuickPulseTelemetryProcessor(next);
+        return quickPulseProcessor;
+    })
+    .Build();
+
+var quickPulseModule = new QuickPulseTelemetryModule();
+quickPulseModule.Initialize(configuration);
+quickPulseModule.RegisterTelemetryProcessor(quickPulseProcessor);
+```
+
+2. Manual Request Tracking
+Incorporate manual request tracking by adding this code to the Run method:
+
+```csharp
+var timer = System.Diagnostics.Stopwatch.StartNew();
+var startTime = DateTime.UtcNow;
+```
+
+```csharp
+timer.Stop();
+var telemetry = new RequestTelemetry
+{
+    Name = $"{req.Method} {req.Path}",
+    Timestamp = startTime,
+    Duration = timer.Elapsed,
+    ResponseCode = "200", // Adjust based on actual response
+    Success = true,
+    Url = new Uri(req.GetDisplayUrl())
+};
+telemetryClient.TrackRequest(telemetry);
+```
+
+## Output
+
+The code snippet provided integrates several components from Microsoft's Application Insights SDK to enable live metric monitoring and manual request tracking for an application. Initially, it sets up a `QuickPulseTelemetryProcessor`, which is crucial for collecting real-time performance data. This processor is added to the telemetry processing chain of the Application Insights configuration, ensuring that performance metrics are continuously analyzed. The `QuickPulseTelemetryModule` is then initialized and configured to register the newly created telemetry processor, enabling the feature known as Live Metrics Stream in Application Insights. This stream provides immediate feedback on the performance of the application.
+
+For manual request tracking, the code records the start time and duration of HTTP requests using a stopwatch. It then creates a `RequestTelemetry` object that captures essential details about each request, such as the HTTP method, URL path, response time, response code, and success status. This telemetry data is sent to Application Insights through the `telemetryClient.TrackRequest` method, allowing to monitor and analyze HTTP request metrics in near real-time, thereby enhancing the capability to observe and respond to the application's operational performance dynamically.
+
+<div align="center">
+  <img src="images/Step_7_custom_event_p2.png" width="1200" alt="">
+</div>
+
+### Step 8: Setup Custom Telemetry Processor
+
+To effectively manage and customize the telemetry data sent to Application Insights, we integrate a custom telemetry processor. This processor allows us to selectively filter and handle telemetry data, such as excluding exceptions from being logged in Application Insights.
+
+#### Create `Startup.cs`
+
+The `Startup.cs` file configures services and settings at the startup of the Azure Function app. Here, we specifically add our custom telemetry processor to the Application Insights configuration. This integration allows our function app to use the custom logic defined in the telemetry processor throughout its operations.
+
+```csharp
+using Microsoft.Azure.Functions.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.ApplicationInsights.Extensibility;
+
+[assembly: FunctionsStartup(typeof(MyFunctionApp.Startup))]
+
+namespace MyFunctionApp
+{
+    public class Startup : FunctionsStartup
+    {
+        public override void Configure(IFunctionsHostBuilder builder)
+        {
+            // Registers the custom telemetry processor with the dependency injection container
+            builder.Services.AddApplicationInsightsTelemetryProcessor<CustomTelemetryProcessor>();
+        }
+    }
+}
+```
+
+#### Create `CustomTelemetryProcessor.cs`:
+
+This file defines the `CustomTelemetryProcessor` class, which implements the ITelemetryProcessor interface. It is designed to intercept and process all telemetry data before it is sent to Application Insights. Our custom processor specifically checks if the telemetry item is an exception and, if so, stops further processing to prevent it from being logged.
+
+```csharp
+using Microsoft.ApplicationInsights.Channel;
+using Microsoft.ApplicationInsights.DataContracts;
+using Microsoft.ApplicationInsights.Extensibility;
+using System;
+
+public class CustomTelemetryProcessor : ITelemetryProcessor
+{
+    private ITelemetryProcessor Next { get; set; }
+
+    // Constructor to initialize the next processor in the chain
+    public CustomTelemetryProcessor(ITelemetryProcessor next)
+    {
+        this.Next = next;
+    }
+
+    public void Process(ITelemetry item)
+    {
+        // Check if the telemetry item is an exception
+        if (item is ExceptionTelemetry)
+        {
+            // If it is, return early without calling the next processor
+            return;
+        }
+        
+        // Otherwise, pass the telemetry item to the next processor in the chain
+        Next.Process(item);
+    }
+}
+```
+
+#### Modify `MyFunctionApp.cs` to Define Custom Processor First:
+
+In the static constructor of HttpTrigger1, we configure the telemetry processors. The CustomTelemetryProcessor is added first in the chain to ensure that any exceptions are filtered out immediately. This is followed by the QuickPulseTelemetryProcessor for live metrics monitoring.
+
+```csharp
+static HttpTrigger1()
+{
+    // Retrieve the Application Insights connection string from environment variables
+    string connectionString = Environment.GetEnvironmentVariable("APP_INSIGHTS_CONNECTION_STRING");
+
+    // Create a default telemetry configuration
+    TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
+
+    // Assign the retrieved connection string to the configuration
+    configuration.ConnectionString = connectionString;
+    
+    QuickPulseTelemetryProcessor quickPulseProcessor = null;
+
+    // Setup the telemetry processor chain, adding CustomTelemetryProcessor first
+    configuration.DefaultTelemetrySink.TelemetryProcessorChainBuilder
+        .Use((next) => new CustomTelemetryProcessor(next)) // Add the custom processor first to filter out exceptions
+        .Use((next) => {
+            quickPulseProcessor = new QuickPulseTelemetryProcessor(next); // Setup QuickPulseTelemetryProcessor next
+            return quickPulseProcessor;
+        })
+        .Build();
+
+    var quickPulseModule = new QuickPulseTelemetryModule();
+    quickPulseModule.Initialize(configuration);
+    quickPulseModule.RegisterTelemetryProcessor(quickPulseProcessor); // Register QuickPulseTelemetryProcessor in the QuickPulse module
+
+    // Initialize the telemetry client with the configured settings
+    telemetryClient = new TelemetryClient(configuration);
+}
+```
+
+This configuration guarantees that our Azure Functions application transmits telemetry data tailored to our specific operational and monitoring requirements. For instance, exceptions no longer appear in the live metrics or transaction searches. The follwoing captures before and after implementing the Custom Telemetry Processor.
+
+<div align="center">
+  <img src="images/Step_8_TelemetryProcessor_p_0.png" width="1200" alt="">
+  <img src="images/Step_8_TelemetryProcessor_p_1.png" width="1200" alt="">
 </div>

@@ -11,7 +11,11 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.ApplicationInsights.Extensibility.PerfCounterCollector.QuickPulse;
 using System.Collections.Generic; // Required for using Dictionary
+using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.ApplicationInsights.DataContracts;
+using Microsoft.ApplicationInsights.Extensibility.PerfCounterCollector.QuickPulse;
 
 public static class HttpTrigger1
 {
@@ -27,10 +31,26 @@ public static class HttpTrigger1
 
         // Assign the retrieved connection string to the configuration
         configuration.ConnectionString = connectionString;
+        
+        QuickPulseTelemetryProcessor quickPulseProcessor = null;
+
+        // Setup the telemetry processor chain, adding CustomTelemetryProcessor first
+        configuration.DefaultTelemetrySink.TelemetryProcessorChainBuilder
+            .Use((next) => new CustomTelemetryProcessor(next)) // Add the custom processor first to filter out exceptions
+            .Use((next) => {
+                quickPulseProcessor = new QuickPulseTelemetryProcessor(next); // Setup QuickPulseTelemetryProcessor next
+                return quickPulseProcessor;
+            })
+            .Build();
+
+        var quickPulseModule = new QuickPulseTelemetryModule();
+        quickPulseModule.Initialize(configuration);
+        quickPulseModule.RegisterTelemetryProcessor(quickPulseProcessor); // Register QuickPulseTelemetryProcessor in the QuickPulse module
 
         // Initialize the telemetry client with the configured settings
         telemetryClient = new TelemetryClient(configuration);
     }
+
 
     [FunctionName("HttpTrigger1")]
     public static async Task<IActionResult> Run(
@@ -38,7 +58,8 @@ public static class HttpTrigger1
         ILogger log)
     {
         log.LogInformation("C# HTTP trigger function processed a request.");
-
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var startTime = DateTime.UtcNow;
         string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
         CloudStorageAccount storageAccount = CloudStorageAccount.Parse(connectionString);
         CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
@@ -64,7 +85,49 @@ public static class HttpTrigger1
 
         // Track a custom event with the custom properties
         telemetryClient.TrackEvent("BlobCreated", customProperties);
-        
+        timer.Stop();
+        var telemetry = new RequestTelemetry
+        {
+            Name = $"{req.Method} {req.Path}",
+            Timestamp = startTime,
+            Duration = timer.Elapsed,
+            ResponseCode = "200", // Adjust based on actual response
+            Success = true,
+            Url = new Uri(req.GetDisplayUrl())
+        };
+        telemetryClient.TrackRequest(telemetry);
+
+        // An example exception to Application Insights
+        try
+        {
+            throw new Exception("Example exception");
+        }
+        catch (Exception ex)
+        {
+            telemetryClient.TrackException(ex);
+        }
+
+        // Send dependency telemetry to Application Insights
+        var dependencyTelemetry = new DependencyTelemetry
+        {
+            Name = "AzureBlob",
+            Target = "AzureBlob",
+            Data = "AzureBlob",
+            Timestamp = startTime,
+            Duration = timer.Elapsed,
+            Success = true
+        };
+        telemetryClient.TrackDependency(dependencyTelemetry);
+
+        // Send a custom metric to Application Insights
+        var metric = new MetricTelemetry("CustomMetric", 1);
+        metric.Properties.Add("Detail", "Additional Info");
+        telemetryClient.TrackMetric(metric);
+
+        // Flush the telemetry to ensure that it is sent to Application Insights
+        telemetryClient.Flush();
+
+
         return new OkObjectResult(responseMessage);
     }
 }
