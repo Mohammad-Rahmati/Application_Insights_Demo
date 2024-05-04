@@ -100,7 +100,7 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
     ```
     Add the Application Insight service to the ```Program.cs```:
 
-    ```
+    ```csharp
     builder.Services.AddApplicationInsightsTelemetry(builder.Configuration["ApplicationInsights:ConnectionString"]);
     ```
 
@@ -371,6 +371,11 @@ Upon completion, you'll notice the Blob Storage dependency displayed on the appl
 </div>
 
 ### Remove Application Insight from Console
+Off-the-shelf Application Insights can send and digest a high volume of information, potentially causing unnecessary costs for monitoring. Although it is a simple method for deploying telemetry collection from your app, it lacks flexibility. To have more control over the telemetry behavior of the app, we need to manually define the Application Insights connection and telemetry configuration.
+
+#### IMPORTANT
+It is important not to use `APPLICATIONINSIGHTS_CONNECTION_STRING` as the name of the environment variable since the function app automatically enables the Application Insights agent and collects data again. Therefore, whether you are defining the connection string locally in `local.settings.json` or in the environment variables of your function app, you should use another name, such as `APP_INSIGHTS_CONNECTION_STRING`. With this name, the Application Insights agent will not be automatically enabled. Another important point is that, in addition to `Microsoft.ApplicationInsights.AspNetCore`, the `Microsoft.NET.Sdk.Functions` package inherently searches for the `APPLICATIONINSIGHTS_CONNECTION_STRING` variable and, if present in local or cloud environments, will override the settings and send all the logs to Application Insights. Thus, by using a different name than `APPLICATIONINSIGHTS_CONNECTION_STRING`, we both prevent the agent from being automatically enabled and the `Microsoft.NET.Sdk.Functions` package from sending telemetry.
+
 Let's remove Application Insights from the Function App and achieve the same goal through code instead of a non-code agent implementation. To remove Application Insights from the Function App, access the Environment Variables section and delete the Application Insight variables. This action restores the Function App's Application Insight section to its original state. It automatically reactivates once the variables are removed. You need to remove the following variables:
 1. APPINSIGHTS_INSTRUMENTATIONKEY
 2. APPLICATIONINSIGHTS_CONNECTION_STRING
@@ -399,34 +404,77 @@ Next, verify that your host.json file includes the appropriate settings to enabl
 }
 ```
 
-Ensure that the `APPLICATIONINSIGHTS_CONNECTION_STRING` is defined in the environment variables in the Function App settings.
+Ensure that the `APP_INSIGHTS_CONNECTION_STRING` is defined in the environment variables in the Function App settings or `local.settings.json`.
 
-## Step 8: Add Custom Event Tracking
+### Sending Custom Event in Function App
 
-### Custom Event for web app
-First, ensure you include the necessary namespace in your `index.cshtml.cs` file:
+To enable custom events in your Function App, you need to include specific packages that allow interaction with Application Insights. Add the following `using` statements at the top of `MyHttpFunction.cs` file:
 
 ```csharp
 using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Extensibility;
+using System.Collections.Generic; // Required for using Dictionary
 ```
 
-Then, initialize the TelemetryClient within your IndexModel class:
+#### Initialization of TelemetryClient
+Add the following code to initialize the TelemetryClient. This client will be used to send telemetry data to Application Insights.
 
-```cs
-private readonly TelemetryClient _telemetryClient;
-
-public IndexModel(ILogger<IndexModel> logger, TelemetryClient telemetryClient)
+```csharp
+private static TelemetryClient telemetryClient;
+static HttpTrigger1()
 {
-    _logger = logger;
-    _telemetryClient = telemetryClient;
+    // Retrieve the Application Insights connection string from environment variables
+    string connectionString = Environment.GetEnvironmentVariable("APP_INSIGHTS_CONNECTION_STRING");
+
+    // Create a default telemetry configuration
+    TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
+
+    // Assign the retrieved connection string to the configuration
+    configuration.ConnectionString = connectionString;
+
+    // Initialize the telemetry client with the configured settings
+    telemetryClient = new TelemetryClient(configuration);
 }
 ```
 
-Include the following line to track a custom event in the try block of your OnPostFetchDataWithNameAsync method:
+This block of code performs the following functions:
 
-```cs
-_telemetryClient.TrackEvent("Custom API call succeeded", new Dictionary<string, string> { { "name", Name } });
+- Environment Variable Retrieval: It retrieves the Application Insights connection string from the environment variables. This connection string is critical for connecting your application to the correct Application Insights resource.
+- Configuration Setup: It creates a default telemetry configuration and assigns the retrieved connection string to it.
+- TelemetryClient Initialization: It initializes the TelemetryClient with the specified configuration. This client is responsible for sending telemetry data from your application to Application Insights.
+
+To track a custom event for blob creation, use the following line of code:
+
+```csharp
+// Create a dictionary to hold custom properties
+Dictionary<string, string> customProperties = new Dictionary<string, string>();
+customProperties.Add("BlobName", blockBlob.Name);
+customProperties.Add("BlobUri", blockBlob.Uri.ToString());
+
+// Track a custom event with the custom properties
+telemetryClient.TrackEvent("BlobCreated", customProperties);
 ```
-This implementation allows you to track specific events in your application, providing insights into its usage and performance. By adding custom event tracking, you can monitor how often certain features are used, detect issues, or understand user behavior better. The TrackEvent method logs the event with a name and, optionally, a set of properties that can be analyzed later in Application Insights.
 
-### Custom Event for Function App
+This block of code performs the following functions:
+
+
+- A new dictionary named `customProperties` of type `<string, string>` is created. This dictionary is designed to hold key-value pairs where both the key and value are strings. This structure is used to store metadata about the event that you wish to log.
+
+
+- Two properties are added to the `customProperties` dictionary:
+    - `"BlobName"`: The name of the blob. `blockBlob.Name` retrieves the name property of the blob, which uniquely identifies it within its storage container.
+    - `"BlobUri"`: The URI of the blob. `blockBlob.Uri.ToString()` converts the URI object of the blob to its string representation, providing a web address where the blob can be accessed.
+
+
+- The `telemetryClient.TrackEvent` method is called to log a custom event named `"BlobCreated"`. This event is sent to Application Insights with the `customProperties` dictionary attached. Application Insights uses this information to record and display an event indicating that a blob was created, along with the associated metadata (blob name and URI).
+
+#### Output
+
+Here is the result of adding a custom event using the Application Insights SDK. Noticeably, there are no live metrics (charts and sample telemetry) available for this setup. This is because we are manually configuring the telemetry setup and not using the agent-based method. However, the log is appearing in the transaction search and contains the custom information that we defined `"BlobName"` and `"BlobUri"`.
+
+
+<div align="center">
+  <img src="images/Step_7_custom_event_p1_0.png" width="1200" alt="">
+  <img src="images/Step_7_custom_event_p1_1.png" width="1200" alt="">
+  <img src="images/Step_7_custom_event_p1_2.png" width="1200" alt="">
+</div>

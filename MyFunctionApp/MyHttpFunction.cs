@@ -11,18 +11,26 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
-using System.Collections.Generic;
+using System.Collections.Generic; // Required for using Dictionary
 
 public static class HttpTrigger1
 {
+
     private static TelemetryClient telemetryClient;
     static HttpTrigger1()
-        {
-            string connectionString = Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
-            TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
-            configuration.ConnectionString = connectionString;
-            telemetryClient = new TelemetryClient(configuration);
-        }
+    {
+        // Retrieve the Application Insights connection string from environment variables
+        string connectionString = Environment.GetEnvironmentVariable("APP_INSIGHTS_CONNECTION_STRING");
+
+        // Create a default telemetry configuration
+        TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
+
+        // Assign the retrieved connection string to the configuration
+        configuration.ConnectionString = connectionString;
+
+        // Initialize the telemetry client with the configured settings
+        telemetryClient = new TelemetryClient(configuration);
+    }
 
     [FunctionName("HttpTrigger1")]
     public static async Task<IActionResult> Run(
@@ -30,13 +38,8 @@ public static class HttpTrigger1
         ILogger log)
     {
         log.LogInformation("C# HTTP trigger function processed a request.");
-        string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            log.LogError("Missing AzureWebJobsStorage connection string.");
-            return new StatusCodeResult(500); // Internal Server Error
-        }
 
+        string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
         CloudStorageAccount storageAccount = CloudStorageAccount.Parse(connectionString);
         CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
         CloudBlobContainer container = blobClient.GetContainerReference("azure-webjobs-container");
@@ -54,6 +57,14 @@ public static class HttpTrigger1
         CloudBlockBlob blockBlob = container.GetBlockBlobReference($"{Guid.NewGuid()}.txt");
         await blockBlob.UploadTextAsync(responseMessage);
 
+        // Create a dictionary to hold custom properties
+        Dictionary<string, string> customProperties = new Dictionary<string, string>();
+        customProperties.Add("BlobName", blockBlob.Name);
+        customProperties.Add("BlobUri", blockBlob.Uri.ToString());
+
+        // Track a custom event with the custom properties
+        telemetryClient.TrackEvent("BlobCreated", customProperties);
+        
         return new OkObjectResult(responseMessage);
     }
 }

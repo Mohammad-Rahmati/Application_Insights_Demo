@@ -4,7 +4,8 @@
         "applicationInsights": {
             "samplingSettings": {
                 "isEnabled": false
-            }
+            },
+            "enableLiveMetricsFilters": false
         }
     }
 }
