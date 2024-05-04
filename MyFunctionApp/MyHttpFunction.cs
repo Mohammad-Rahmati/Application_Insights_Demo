@@ -31,7 +31,10 @@ public static class HttpTrigger1
 
         // Assign the retrieved connection string to the configuration
         configuration.ConnectionString = connectionString;
-        
+
+        // Explicitly adding telemetry initializer
+        configuration.TelemetryInitializers.Add(new DependencyTelemetryInitializer());
+
         QuickPulseTelemetryProcessor quickPulseProcessor = null;
 
         // Setup the telemetry processor chain, adding CustomTelemetryProcessor first
@@ -123,6 +126,9 @@ public static class HttpTrigger1
         var metric = new MetricTelemetry("CustomMetric", 1);
         metric.Properties.Add("Detail", "Additional Info");
         telemetryClient.TrackMetric(metric);
+
+        // track a custom trace
+        telemetryClient.TrackTrace("This is a custom trace message");
 
         // Flush the telemetry to ensure that it is sent to Application Insights
         telemetryClient.Flush();

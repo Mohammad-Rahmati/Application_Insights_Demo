@@ -530,6 +530,43 @@ var telemetry = new RequestTelemetry
 telemetryClient.TrackRequest(telemetry);
 ```
 
+Add the following telemetry for covering other streams:
+
+```csharp
+// An example exception to Application Insights
+try
+{
+    throw new Exception("Example exception");
+}
+catch (Exception ex)
+{
+    telemetryClient.TrackException(ex);
+}
+
+// Send dependency telemetry to Application Insights
+var dependencyTelemetry = new DependencyTelemetry
+{
+    Name = "AzureBlob",
+    Target = "AzureBlob",
+    Data = "AzureBlob",
+    Timestamp = startTime,
+    Duration = timer.Elapsed,
+    Success = true
+};
+telemetryClient.TrackDependency(dependencyTelemetry);
+
+// Send a custom metric to Application Insights
+var metric = new MetricTelemetry("CustomMetric", 1);
+metric.Properties.Add("Detail", "Additional Info");
+telemetryClient.TrackMetric(metric);
+
+// track a custom trace
+telemetryClient.TrackTrace("This is a custom trace message");
+
+// Flush the telemetry to ensure that it is sent to Application Insights
+telemetryClient.Flush();
+```
+
 ## Output
 
 The code snippet provided integrates several components from Microsoft's Application Insights SDK to enable live metric monitoring and manual request tracking for an application. Initially, it sets up a `QuickPulseTelemetryProcessor`, which is crucial for collecting real-time performance data. This processor is added to the telemetry processing chain of the Application Insights configuration, ensuring that performance metrics are continuously analyzed. The `QuickPulseTelemetryModule` is then initialized and configured to register the newly created telemetry processor, enabling the feature known as Live Metrics Stream in Application Insights. This stream provides immediate feedback on the performance of the application.
@@ -570,7 +607,7 @@ namespace MyFunctionApp
 
 #### Create `CustomTelemetryProcessor.cs`:
 
-This file defines the `CustomTelemetryProcessor` class, which implements the ITelemetryProcessor interface. It is designed to intercept and process all telemetry data before it is sent to Application Insights. Our custom processor specifically checks if the telemetry item is an exception and, if so, stops further processing to prevent it from being logged.
+This file defines the `CustomTelemetryProcessor` class, which implements the ITelemetryProcessor interface. It is designed to intercept and process all telemetry data before it is sent to Application Insights. Our custom processor specifically checks if the telemetry item is an trace and, if so, stops further processing to prevent it from being logged.
 
 ```csharp
 using Microsoft.ApplicationInsights.Channel;
@@ -591,7 +628,7 @@ public class CustomTelemetryProcessor : ITelemetryProcessor
     public void Process(ITelemetry item)
     {
         // Check if the telemetry item is an exception
-        if (item is ExceptionTelemetry)
+        if (item is Trace)
         {
             // If it is, return early without calling the next processor
             return;
@@ -639,9 +676,63 @@ static HttpTrigger1()
 }
 ```
 
-This configuration guarantees that our Azure Functions application transmits telemetry data tailored to our specific operational and monitoring requirements. For instance, exceptions no longer appear in the live metrics or transaction searches. The follwoing captures before and after implementing the Custom Telemetry Processor.
+This configuration guarantees that our Azure Functions application transmits telemetry data tailored to our specific operational and monitoring requirements. For instance, traces no longer appear in the live metrics or transaction searches. The follwoing captures before and after implementing the Custom Telemetry Processor.
 
 <div align="center">
   <img src="images/Step_8_TelemetryProcessor_p_0.png" width="1200" alt="">
   <img src="images/Step_8_TelemetryProcessor_p_1.png" width="1200" alt="">
+</div>
+
+
+### Step 9: Setup Custom Telemetry Initializer
+
+A Telemetry Initializer in the context of Application Insights is a component that enriches telemetry data before it's sent to the Application Insights service. It allows you to add, remove, or modify properties of telemetry data. This can be useful for adding custom logic to filter, correlate, or enhance telemetry data based on your specific requirements.
+
+1. Create a new file and name it `DependencyTelemetryInitializer.cs`.
+
+2. Add the Following Code:
+   This code snippet defines a custom telemetry initializer that modifies the `Success` property of dependency telemetry based on the call duration. If the call duration exceeds 55 milliseconds, `Success` is set to `false`, indicating a failed dependency call; otherwise, it is set to `true`.
+
+   ```csharp
+   using Microsoft.ApplicationInsights.Channel;
+   using Microsoft.ApplicationInsights.DataContracts;
+   using Microsoft.ApplicationInsights.Extensibility;
+   using System;
+
+   public class DependencyTelemetryInitializer : ITelemetryInitializer
+   {
+       public void Initialize(ITelemetry telemetry)
+       {
+           if (telemetry is DependencyTelemetry dependency)
+           {
+               if (dependency.Duration.TotalMilliseconds > 55)
+               {
+                   dependency.Success = false;
+               }
+               else
+               {
+                   dependency.Success = true;
+               }
+           }
+       }
+   }
+   ```
+
+3. Update Startup.cs:
+Add the custom telemetry initializer to your service collection to ensure it's active. Insert the following line in your Startup.cs file within the configuration setup:
+
+    ```csharp
+    builder.Services.AddSingleton<ITelemetryInitializer, DependencyTelemetryInitializer>();
+    ```
+
+4. Add to Configuration in MyHttpFunction.cs:
+Explicitly add the telemetry initializer in your HTTP function configuration. This step is crucial for functions or areas where you need explicit control over telemetry:
+    ```csharp
+    configuration.TelemetryInitializers.Add(new DependencyTelemetryInitializer());
+    ```
+## Output
+This setup ensures that all dependency telemetry collected through your application will now include custom logic to mark dependencies as failed based on the duration of the call, providing more granular control over monitoring and alerting behaviors. As can be seen, dependency calls lasting over 55 ms are categorized as `Success = false`, while those below are marked true.
+
+<div align="center">
+  <img src="images/Step_9_TelemetryInitializer.png" width="1200" alt="">
 </div>

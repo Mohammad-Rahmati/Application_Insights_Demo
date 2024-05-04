@@ -11,6 +11,9 @@ namespace MyFunctionApp
         public override void Configure(IFunctionsHostBuilder builder)
         {
             builder.Services.AddApplicationInsightsTelemetryProcessor<CustomTelemetryProcessor>();
+        
+            builder.Services.AddSingleton<ITelemetryInitializer, DependencyTelemetryInitializer>();
+            
         }
     }
 }
