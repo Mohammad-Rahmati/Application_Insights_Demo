@@ -15,8 +15,8 @@ public class CustomTelemetryProcessor : ITelemetryProcessor
 
     public void Process(ITelemetry item)
     {
-        // Check if the telemetry item is an trace telemetry item
-        if (item is TraceTelemetry trace)
+        // Check if the telemetry item is not an trace telemetry item
+        if (!(item is TraceTelemetry))
         {
             // If it is, return early without calling the next processor
             return;

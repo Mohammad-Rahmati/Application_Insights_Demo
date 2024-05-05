@@ -82,7 +82,7 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
    dotnet add package Microsoft.ApplicationInsights.AspNetCore
    ```
 2. **Configure Application Insights in appsettings.json:**
-    Add the following JSON configuration to your ```appsettings.json``` file. This configuration includes the connection string with your unique InstrumentationKey, IngestionEndpoint, LiveEndpoint, and ApplicationId. Make sure to replace the placeholders with your actual Application Insights values:
+    Add the following JSON configuration to your ```appsettings.json``` file. This configuration includes the connection string with your unique InstrumentationKey, IngestionEndpoint, LiveEndpoint, and ApplicationId. Make sure to replace the placeholders with your actual Application Insights values, Note that we are going to use App_Insights instead of ApplicationInsight to prevent any conflicts with other services that use Application Insights and send telemetry automatically.
     ```json
     {
     "Logging": {
@@ -91,17 +91,20 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
         "Microsoft.AspNetCore": "Warning"
         }
     },
-    "ApplicationInsights": {
+    "App_Insights": {
         "ConnectionString": "INSERT_CONNECTION_STRING_HERE"
     },
     "AllowedHosts": "*"
     }
-
     ```
     Add the Application Insight service to the ```Program.cs```:
 
     ```csharp
-    builder.Services.AddApplicationInsightsTelemetry(builder.Configuration["ApplicationInsights:ConnectionString"]);
+    // Updated Application Insights configuration
+    builder.Services.AddApplicationInsightsTelemetry(options =>
+    {
+        options.ConnectionString = builder.Configuration["App_Insights:ConnectionString"];
+    });
     ```
 
 ## Step 4: Create a Function App as Backend service and internal API for the background jobs
@@ -735,4 +738,70 @@ This setup ensures that all dependency telemetry collected through your applicat
 
 <div align="center">
   <img src="images/Step_9_TelemetryInitializer.png" width="1200" alt="">
+</div>
+
+### Step 10: Sampling
+
+Sampling is a feature in Application Insights designed to reduce telemetry traffic, data costs, and storage costs while preserving statistically correct analysis of application data. It helps avoid throttling by Application Insights by selecting related items, enabling easier navigation during diagnostic investigations.
+
+**Note:** The sampling behavior can only be modified in `Host.json` if you are using agent-based Application Insights, which provides limited flexibility in designing the configuration for telemetry itself. For our case, the sampling configuration needs to be added to the processor chain builder in `MyHttpFunction.cs`.
+
+#### Configuring Sampling
+
+1. Modify the Processor Chain:
+
+    In `MyHttpFunction.cs`, import the necessary namespace:
+    ```csharp
+    using Microsoft.ApplicationInsights.WindowsServer.TelemetryChannel;
+    ```
+
+    Then, modify the chain and add fixed sampling:
+    ```csharp
+    configuration.DefaultTelemetrySink.TelemetryProcessorChainBuilder
+        .Use(next => new CustomTelemetryProcessor(next))
+        .Use(next => {
+            QuickPulseTelemetryProcessor quickPulseProcessor = new QuickPulseTelemetryProcessor(next);
+            return quickPulseProcessor;
+        })
+        .UseSampling(1)
+        .Build();
+    ```
+
+2. Modify Telemetry Trace:
+
+    Comment out the original trace message tracking and add a loop to create multiple trace messages:
+    ```csharp
+    // telemetryClient.TrackTrace("This is a custom trace message");
+    
+    // a loop of 1000 same trace messages
+    for (int i = 0; i < 1000; i++)
+    {
+        telemetryClient.TrackTrace("This is a custom trace message");
+    }
+    ```
+
+3. Modify the Custom Telemetry Processor:
+
+    Update the `CustomTelemetryProcessor` to only process trace telemetry items:
+    ```csharp
+    // Check if the telemetry item is not a trace telemetry item
+    if (!(item is TraceTelemetry))
+    {
+        // If it is, return early without calling the next processor
+        return;
+    }
+    ```
+
+4. Simulate Traffic:
+
+    Run the Python script `send_requests.py` located in `SimulateTraffic` directory to send requests using the following command:
+    ```bash
+    python send_requests.py <URL> 10 60
+    ```
+    This command simulates a load of 10 requests per second for 60 seconds. If `.UseSampling(100)` is set to 100, then 100% of the telemetry (60 seconds * 10 requests per second * 1000 traces per request = 600,000 traces) should be registered. When changed to 1 (1%), only 6,000 traces are sent to Application Insights.
+
+The first two bars represent the 100% simulation, totaling 600K traces. The last bar shows the second simulation with 1% sampling, which results in 6K traces.
+
+<div align="center">
+  <img src="images/Step_10_sampling.png" width="1200" alt="">
 </div>
