@@ -39,7 +39,7 @@ public static class HttpTrigger1
                 quickPulseProcessor = new QuickPulseTelemetryProcessor(next);
                 return quickPulseProcessor;
             })
-            .UseSampling(1)
+            .UseSampling(100)
             .Build();
 
         var quickPulseModule = new QuickPulseTelemetryModule();

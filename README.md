@@ -184,7 +184,6 @@ This sets up a new Azure Function App with a single HTTP-triggered function. The
             return new OkObjectResult(responseMessage);
         }
     }
-
     ```
 
     ### 2. Update `local.settings.json`
@@ -341,7 +340,6 @@ func azure functionapp publish $FUNCTION_APP_NAME
             return Page();
         }
     }
-
     ```
     
     ### 3. Push to deploy
@@ -580,7 +578,7 @@ For manual request tracking, the code records the start time and duration of HTT
   <img src="images/Step_7_custom_event_p2.png" width="1200" alt="">
 </div>
 
-### Step 8: Setup Custom Telemetry Processor
+## Step 8: Setup Custom Telemetry Processor
 
 To effectively manage and customize the telemetry data sent to Application Insights, we integrate a custom telemetry processor. This processor allows us to selectively filter and handle telemetry data, such as excluding exceptions from being logged in Application Insights.
 
@@ -687,7 +685,7 @@ This configuration guarantees that our Azure Functions application transmits tel
 </div>
 
 
-### Step 9: Setup Custom Telemetry Initializer
+## Step 9: Setup Custom Telemetry Initializer
 
 A Telemetry Initializer in the context of Application Insights is a component that enriches telemetry data before it's sent to the Application Insights service. It allows you to add, remove, or modify properties of telemetry data. This can be useful for adding custom logic to filter, correlate, or enhance telemetry data based on your specific requirements.
 
@@ -740,7 +738,7 @@ This setup ensures that all dependency telemetry collected through your applicat
   <img src="images/Step_9_TelemetryInitializer.png" width="1200" alt="">
 </div>
 
-### Step 10: Sampling
+## Step 10: Sampling
 
 Sampling is a feature in Application Insights designed to reduce telemetry traffic, data costs, and storage costs while preserving statistically correct analysis of application data. It helps avoid throttling by Application Insights by selecting related items, enabling easier navigation during diagnostic investigations.
 
@@ -805,3 +803,25 @@ The first two bars represent the 100% simulation, totaling 600K traces. The last
 <div align="center">
   <img src="images/Step_10_sampling.png" width="1200" alt="">
 </div>
+
+## Step 11: Setup Alerts
+
+Change the sampling back to 100 percent and remove any filtering in `CustomTelemetryProcessor.cs`. Then, push both the function and the web app to Azure and deploy both.
+
+```bash
+pip install locust
+```
+
+We are going to use `simulate_load.py` in `SimulateTraffic` to send requests to the deployed website. The goal is to create both normal and heavy load conditions to trigger an alert.
+
+**Create an alert** and choose the **request rate** as an example, setting the threshold to **150**. Run the normal load by using:
+
+```bash
+python simulate_load.py <url> normal
+```
+
+Then, change it to heavy to see if the alert triggers:
+
+```bash
+python simulate_load.py <url> heavy
+```
