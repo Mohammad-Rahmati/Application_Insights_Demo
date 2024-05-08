@@ -11,32 +11,34 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
-using Microsoft.ApplicationInsights.Extensibility.PerfCounterCollector.QuickPulse;
 using System.Collections.Generic; // Required for using Dictionary
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.ApplicationInsights.DataContracts;
+using Microsoft.ApplicationInsights.Extensibility.PerfCounterCollector.QuickPulse;
 using Microsoft.ApplicationInsights.WindowsServer.TelemetryChannel;
 
 public static class HttpTrigger1
 {
-
     private static TelemetryClient telemetryClient;
-
     static HttpTrigger1()
     {
+        // Retrieve the Application Insights connection string from environment variables
         string connectionString = Environment.GetEnvironmentVariable("APP_INSIGHTS_CONNECTION_STRING");
+
+        // Create a default telemetry configuration
         TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
+
+        // Assign the retrieved connection string to the configuration
         configuration.ConnectionString = connectionString;
-
-        configuration.TelemetryInitializers.Add(new DependencyTelemetryInitializer());
-
+        
         QuickPulseTelemetryProcessor quickPulseProcessor = null;
 
-        // Set up telemetry processors using the chain builder
+        // Setup the telemetry processor chain, adding CustomTelemetryProcessor first
+        configuration.TelemetryInitializers.Add(new DependencyTelemetryInitializer());
         configuration.DefaultTelemetrySink.TelemetryProcessorChainBuilder
-            .Use((next) => new CustomTelemetryProcessor(next))
+            .Use((next) => new CustomTelemetryProcessor(next)) // Add the custom processor first to filter out exceptions
             .Use((next) => {
-                quickPulseProcessor = new QuickPulseTelemetryProcessor(next);
+                quickPulseProcessor = new QuickPulseTelemetryProcessor(next); // Setup QuickPulseTelemetryProcessor next
                 return quickPulseProcessor;
             })
             .UseSampling(100)
@@ -44,12 +46,11 @@ public static class HttpTrigger1
 
         var quickPulseModule = new QuickPulseTelemetryModule();
         quickPulseModule.Initialize(configuration);
-        quickPulseModule.RegisterTelemetryProcessor(quickPulseProcessor);
+        quickPulseModule.RegisterTelemetryProcessor(quickPulseProcessor); // Register QuickPulseTelemetryProcessor in the QuickPulse module
 
+        // Initialize the telemetry client with the configured settings
         telemetryClient = new TelemetryClient(configuration);
     }
-
-
 
     [FunctionName("HttpTrigger1")]
     public static async Task<IActionResult> Run(
@@ -76,7 +77,7 @@ public static class HttpTrigger1
 
         CloudBlockBlob blockBlob = container.GetBlockBlobReference($"{Guid.NewGuid()}.txt");
         await blockBlob.UploadTextAsync(responseMessage);
-
+        
         // Create a dictionary to hold custom properties
         Dictionary<string, string> customProperties = new Dictionary<string, string>();
         customProperties.Add("BlobName", blockBlob.Name);
@@ -125,8 +126,6 @@ public static class HttpTrigger1
 
         // track a custom trace
         // telemetryClient.TrackTrace("This is a custom trace message");
-
-
         // a loop of 1000 same trace messages
         for (int i = 0; i < 1000; i++)
         {
@@ -134,8 +133,6 @@ public static class HttpTrigger1
         }
         // Flush the telemetry to ensure that it is sent to Application Insights
         telemetryClient.Flush();
-
-
         return new OkObjectResult(responseMessage);
     }
 }

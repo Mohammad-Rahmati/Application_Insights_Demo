@@ -9,7 +9,7 @@ public class DependencyTelemetryInitializer : ITelemetryInitializer
     {
         if (telemetry is DependencyTelemetry dependency)
         {
-            if (dependency.Duration.TotalMilliseconds > 55)
+            if (dependency.Duration.TotalMilliseconds > 10)
             {
                 dependency.Success = false;
             }

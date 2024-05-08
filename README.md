@@ -63,7 +63,12 @@ chmod +x 2-AppInsights-setup.sh
 ```
 This command creates an Application Insights resource with the type and kind set to 'web', which is suitable for monitoring web applications.
 
-## Step 3: Setting Up Application Insights
+## Step 3: Setting Up Application Insights (Agent)
+Enable Application Insights in the web app service and link it to the recently created Application Insights component using the console.
+
+<div align="center">
+  <img src="images/Step_2.png" width="1200" alt="">
+</div>
 
 To monitor and track the performance of your application, we will integrate Microsoft Application Insights. Follow these steps to configure Application Insights:
 
@@ -82,7 +87,8 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
    dotnet add package Microsoft.ApplicationInsights.AspNetCore
    ```
 2. **Configure Application Insights in appsettings.json:**
-    Add the following JSON configuration to your ```appsettings.json``` file. This configuration includes the connection string with your unique InstrumentationKey, IngestionEndpoint, LiveEndpoint, and ApplicationId. Make sure to replace the placeholders with your actual Application Insights values, Note that we are going to use App_Insights instead of ApplicationInsight to prevent any conflicts with other services that use Application Insights and send telemetry automatically.
+    Add the following JSON configuration to your ```appsettings.json``` file. This configuration includes the connection string with your unique InstrumentationKey, IngestionEndpoint, LiveEndpoint, and ApplicationId. Make sure to replace the placeholders with your actual Application Insights values, Note that we are going to use ApplicationInsights to send telemetry automatically.
+
     ```json
     {
     "Logging": {
@@ -91,7 +97,7 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
         "Microsoft.AspNetCore": "Warning"
         }
     },
-    "App_Insights": {
+    "ApplicationInsights": {
         "ConnectionString": "INSERT_CONNECTION_STRING_HERE"
     },
     "AllowedHosts": "*"
@@ -100,10 +106,9 @@ az monitor app-insights component show --app $APP_INSIGHTS_NAME --resource-group
     Add the Application Insight service to the ```Program.cs```:
 
     ```csharp
-    // Updated Application Insights configuration
     builder.Services.AddApplicationInsightsTelemetry(options =>
     {
-        options.ConnectionString = builder.Configuration["App_Insights:ConnectionString"];
+        options.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
     });
     ```
 
@@ -389,22 +394,6 @@ To include the Application Insights SDK into your Function App, start by adding 
 dotnet add package Microsoft.ApplicationInsights.AspNetCore --version 2.22.0
 ```
 
-Next, verify that your host.json file includes the appropriate settings to enable Application Insights:
-
-```json
-{
-    "version": "2.0",
-    "logging": {
-        "applicationInsights": {
-            "samplingSettings": {
-                "isEnabled": true
-            },
-            "enableLiveMetricsFilters": true
-        }
-    }
-}
-```
-
 Ensure that the `APP_INSIGHTS_CONNECTION_STRING` is defined in the environment variables in the Function App settings or `local.settings.json`.
 
 ### Sending Custom Event in Function App
@@ -582,6 +571,10 @@ For manual request tracking, the code records the start time and duration of HTT
 
 To effectively manage and customize the telemetry data sent to Application Insights, we integrate a custom telemetry processor. This processor allows us to selectively filter and handle telemetry data, such as excluding exceptions from being logged in Application Insights.
 
+```bash
+dotnet add package Microsoft.Azure.Functions.Extensions
+```
+
 #### Create `Startup.cs`
 
 The `Startup.cs` file configures services and settings at the startup of the Azure Function app. Here, we specifically add our custom telemetry processor to the Application Insights configuration. This integration allows our function app to use the custom logic defined in the telemetry processor throughout its operations.
@@ -615,6 +608,7 @@ using Microsoft.ApplicationInsights.Channel;
 using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.ApplicationInsights.Extensibility;
 using System;
+using System.Diagnostics;
 
 public class CustomTelemetryProcessor : ITelemetryProcessor
 {
@@ -629,7 +623,7 @@ public class CustomTelemetryProcessor : ITelemetryProcessor
     public void Process(ITelemetry item)
     {
         // Check if the telemetry item is an exception
-        if (item is Trace)
+        if (item is TraceTelemetry)
         {
             // If it is, return early without calling the next processor
             return;
@@ -692,7 +686,7 @@ A Telemetry Initializer in the context of Application Insights is a component th
 1. Create a new file and name it `DependencyTelemetryInitializer.cs`.
 
 2. Add the Following Code:
-   This code snippet defines a custom telemetry initializer that modifies the `Success` property of dependency telemetry based on the call duration. If the call duration exceeds 55 milliseconds, `Success` is set to `false`, indicating a failed dependency call; otherwise, it is set to `true`.
+   This code snippet defines a custom telemetry initializer that modifies the `Success` property of dependency telemetry based on the call duration. If the call duration exceeds 10 milliseconds, `Success` is set to `false`, indicating a failed dependency call; otherwise, it is set to `true`.
 
    ```csharp
    using Microsoft.ApplicationInsights.Channel;
@@ -706,7 +700,7 @@ A Telemetry Initializer in the context of Application Insights is a component th
        {
            if (telemetry is DependencyTelemetry dependency)
            {
-               if (dependency.Duration.TotalMilliseconds > 55)
+               if (dependency.Duration.TotalMilliseconds > 10)
                {
                    dependency.Success = false;
                }
@@ -738,6 +732,7 @@ This setup ensures that all dependency telemetry collected through your applicat
   <img src="images/Step_9_TelemetryInitializer.png" width="1200" alt="">
 </div>
 
+
 ## Step 10: Sampling
 
 Sampling is a feature in Application Insights designed to reduce telemetry traffic, data costs, and storage costs while preserving statistically correct analysis of application data. It helps avoid throttling by Application Insights by selecting related items, enabling easier navigation during diagnostic investigations.
@@ -761,7 +756,7 @@ Sampling is a feature in Application Insights designed to reduce telemetry traff
             QuickPulseTelemetryProcessor quickPulseProcessor = new QuickPulseTelemetryProcessor(next);
             return quickPulseProcessor;
         })
-        .UseSampling(1)
+        .UseSampling(100)
         .Build();
     ```
 
@@ -794,7 +789,8 @@ Sampling is a feature in Application Insights designed to reduce telemetry traff
 
     Run the Python script `send_requests.py` located in `SimulateTraffic` directory to send requests using the following command:
     ```bash
-    python send_requests.py <URL> 10 60
+    pip install aiohttp tqdm
+    python3 send_requests.py <URL> 10 60
     ```
     This command simulates a load of 10 requests per second for 60 seconds. If `.UseSampling(100)` is set to 100, then 100% of the telemetry (60 seconds * 10 requests per second * 1000 traces per request = 600,000 traces) should be registered. When changed to 1 (1%), only 6,000 traces are sent to Application Insights.
 

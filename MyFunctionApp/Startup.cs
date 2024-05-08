@@ -10,10 +10,9 @@ namespace MyFunctionApp
     {
         public override void Configure(IFunctionsHostBuilder builder)
         {
+            // Registers the custom telemetry processor with the dependency injection container
             builder.Services.AddApplicationInsightsTelemetryProcessor<CustomTelemetryProcessor>();
-        
             builder.Services.AddSingleton<ITelemetryInitializer, DependencyTelemetryInitializer>();
-            
         }
     }
 }
