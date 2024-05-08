@@ -56,7 +56,7 @@ git config --global credential.helper 'cache --timeout=36000'
 git remote add azure <DEPLOYMENT_URL>
 git push azure master
 ```
-## Step 2: Setup Application Insights
+## Step 2: Setup Application Insights Resource
 ```bash
 chmod +x 2-AppInsights-setup.sh
 ./2-AppInsights-setup.sh
@@ -804,17 +804,28 @@ The first two bars represent the 100% simulation, totaling 600K traces. The last
   <img src="images/Step_10_sampling.png" width="1200" alt="">
 </div>
 
-## Step 11: Setup Alerts
+## Step 11: Setup Alerts and Response
 
 Change the sampling back to 100 percent and remove any filtering in `CustomTelemetryProcessor.cs`. Then, push both the function and the web app to Azure and deploy both.
+Make sure that sampling is disabled in both the Function app and web application before deploying them.
 
+```csharp
+builder.Services.AddApplicationInsightsTelemetry(options =>
+{
+    options.ConnectionString = builder.Configuration["App_Insights:ConnectionString"];
+    // Disable adaptive sampling
+    options.EnableAdaptiveSampling = false;
+});
+```
+
+
+
+We are going to use `simulate_load.py` in `SimulateTraffic` to send requests to the deployed website. The goal is to create both normal and heavy load conditions to trigger an alert. Install a necessary library to run the `simulate_load.py`.
 ```bash
 pip install locust
 ```
 
-We are going to use `simulate_load.py` in `SimulateTraffic` to send requests to the deployed website. The goal is to create both normal and heavy load conditions to trigger an alert.
-
-**Create an alert** and choose the **request rate** as an example, setting the threshold to **150**. Run the normal load by using:
+**Create an alert** in Azure Application Insight console and choose the **request rate** as an example, setting the threshold to **150**. Run the normal load by using:
 
 ```bash
 python simulate_load.py <url> normal
