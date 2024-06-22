@@ -17,11 +17,11 @@ public class CustomTelemetryProcessor : ITelemetryProcessor
     public void Process(ITelemetry item)
     {
         // Check if the telemetry item is an exception
-        if (!(item is TraceTelemetry))
-        {
-            // If it is, return early without calling the next processor
-            return;
-        }
+        // if (!(item is TraceTelemetry))
+        // {
+        //     // If it is, return early without calling the next processor
+        //     return;
+        // }
         
         // Otherwise, pass the telemetry item to the next processor in the chain
         Next.Process(item);

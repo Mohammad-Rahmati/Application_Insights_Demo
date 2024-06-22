@@ -25,7 +25,7 @@ check the setup variables in the ```0-config.sh``` script and ```chmod +x 0-conf
 ```bash
 # Configuration variables for the Azure setup
 export RESOURCE_GROUP="application-insights-demo-sis"
-export TAGS='--tags autokillDays=7 reason=testing'
+export TAGS='--tags autokillDays=14 reason=testing'
 export REGIONS="westeurope"
 export APP_NAME="app-insights-demo-sis"
 export APP_SERVICE_PLAN="app-insights-demo-sis-plan"
@@ -44,7 +44,7 @@ chmod +x 1-InitialSetup.sh
 
 Important:
 During the execution of the script, you will be prompted to input a username and password. This is necessary for pushing your application to Azure. 
-Find the Git Clone Uri, local username, and password from Deployment Center on Web App reouce on Azure. Navigate to local SimpleWebApp repository and configure Git deployment
+Find the Git Clone Uri (<DEPLOYMENT_URL>), local username, and password from Deployment Center on Web App resouce on Azure. Navigate to local SimpleWebApp repository and configure Git deployment
 ```bash
 git init
 git add .
@@ -276,7 +276,9 @@ func azure functionapp publish $FUNCTION_APP_NAME
     ```
 
     ### 2. Update `Index.cshtml.cs`
-    make sure to provide the invokation API for the customApiUrl.
+    make sure to provide the <invokation_API> for the customApiUrl. 
+    You can find it at function app -> get function URL
+
     ```cs
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -333,7 +335,7 @@ func azure functionapp publish $FUNCTION_APP_NAME
                 try
                 {
                     var encodedName = HttpUtility.UrlEncode(Name);
-                    string customApiUrl = $"INVOKATION_API&name={encodedName}";
+                    string customApiUrl = $"<INVOKATION_API>&name={encodedName}";
                     CustomApiResponse = await client.GetStringAsync(customApiUrl);
                 }
                 catch (Exception ex)
@@ -832,3 +834,56 @@ Then, change it to heavy to see if the alert triggers:
 ```bash
 python simulate_load.py <url> heavy
 ```
+
+
+# Q&A: Application Version Telemetry
+
+To include the version of the application in the telemetry data for performance comparison across different versions, you can use an initializer. This enables you to compare metrics based on the application version.
+
+## Step 1: Create the Telemetry Initializer
+
+First, create a new file named `AppVersionTelemetryInitializer.cs` and add the following code:
+
+```csharp
+using Microsoft.ApplicationInsights.Channel;
+using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.ApplicationInsights.DataContracts;
+
+public class AppVersionTelemetryInitializer : ITelemetryInitializer
+{
+    private readonly string _appVersion;
+
+    // Constructor to pass the application version
+    public AppVersionTelemetryInitializer(string appVersion)
+    {
+        _appVersion = appVersion;
+    }
+
+    public void Initialize(ITelemetry telemetry)
+    {
+        // Set the application version in the telemetry context
+        if (string.IsNullOrEmpty(telemetry.Context.Component.Version))
+        {
+            telemetry.Context.Component.Version = _appVersion;
+        }
+    }
+}
+```
+
+Next, integrate this initializer into your application by adding the following line to your `MyHttpFunctions.cs` file:
+
+```csharp
+configuration.TelemetryInitializers.Add(new AppVersionTelemetryInitializer("1.0.0"));
+```
+You can replace "1.0.0" with a dynamic value from an environment variable as needed.
+
+## Step 2: Analyzing Telemetry Data
+To analyze the telemetry data based on the application version, use the following Kusto Query Language (KQL) query:
+
+```sql
+dependencies
+| where application_Version contains "1.0"
+| summarize avg(duration) by application_Version
+```
+
+Ensure that the dataset is large enough to be statistically significant for reliable analysis results.

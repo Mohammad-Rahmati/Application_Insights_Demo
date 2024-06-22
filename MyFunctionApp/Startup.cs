@@ -12,7 +12,7 @@ namespace MyFunctionApp
         {
             // Registers the custom telemetry processor with the dependency injection container
             builder.Services.AddApplicationInsightsTelemetryProcessor<CustomTelemetryProcessor>();
-            builder.Services.AddSingleton<ITelemetryInitializer, DependencyTelemetryInitializer>();
+            // builder.Services.AddSingleton<ITelemetryInitializer, DependencyTelemetryInitializer>();
         }
     }
 }
