@@ -834,7 +834,61 @@ Then, change it to heavy to see if the alert triggers:
 ```bash
 python simulate_load.py <url> heavy
 ```
+# Q&A: Setup KQL Monitoring with CLI
 
+Create a JSON file in the Resources folder and add the following template. You can find the scope and action from other alert examples in the console.
+
+```json
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "resources": [
+      {
+        "type": "Microsoft.Insights/scheduledQueryRules",
+        "apiVersion": "2023-03-15-preview",
+        "name": "BlobCreationMoreThan20",
+        "location": "westeurope",
+        "properties": {
+          "displayName": "BlobCreationMoreThan20",
+          "description": "",
+          "severity": 3,
+          "enabled": true,
+          "evaluationFrequency": "PT5M",
+          "scopes": [
+            SCOPE_HERE
+          ],
+          "windowSize": "PT5M",
+          "criteria": {
+            "allOf": [
+              {
+                "query": "customEvents | where timestamp > ago(5m) | summarize count()",
+                "timeAggregation": "Total",
+                "metricMeasureColumn": "count_",
+                "operator": "GreaterThan",
+                "threshold": 20,
+                "failingPeriods": {
+                  "numberOfEvaluationPeriods": 1,
+                  "minFailingPeriodsToAlert": 1
+                }
+              }
+            ]
+          },
+          "actions": {
+            "actionGroups": [
+              ACTION_HERE
+            ]
+          }
+        }
+      }
+    ]
+  }
+
+```
+Then run the following command in CLI. Make sure to login first using `az login` and `source ./0-config.sh` to load the env variables.
+
+```bash
+az deployment group create --name alertCLI --resource-group $RESOURCE_GROUP --template-file alert.json
+```
 
 # Q&A: Application Version Telemetry
 

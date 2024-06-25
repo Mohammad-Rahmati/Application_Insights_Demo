@@ -35,6 +35,7 @@ public static class HttpTrigger1
 
         // Setup the telemetry processor chain, adding CustomTelemetryProcessor first
         configuration.TelemetryInitializers.Add(new AppVersionTelemetryInitializer("1.0.2"));
+        configuration.TelemetryInitializers.Add(new EnvironmentTelemetryInitializer("dev"));
         configuration.DefaultTelemetrySink.TelemetryProcessorChainBuilder
             .Use((next) => new CustomTelemetryProcessor(next)) // Add the custom processor first to filter out exceptions
             .Use((next) => {
@@ -126,7 +127,7 @@ public static class HttpTrigger1
 
         // track a custom trace
         // telemetryClient.TrackTrace("This is a custom trace message");
-        // a loop of 1000 same trace messages
+        // a loop of 1 same trace messages
         for (int i = 0; i < 1; i++)
         {
             telemetryClient.TrackTrace("This is a custom trace message");
